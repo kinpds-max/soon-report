@@ -842,22 +842,28 @@ async function saveAsExcel(){
   try{
     await loadXlsxLib();
     const wb = XLSX.utils.book_new();
+    const rows = [];
+    const merges = [];
+    const addSectionTitle = (title)=>{
+      merges.push({ s: { r: rows.length, c: 0 }, e: { r: rows.length, c: 7 } });
+      rows.push([title]);
+    };
+    const addBlankRow = ()=> rows.push([]);
+
+    // 제목
+    rows.push([`하늘바람 순모임보고서 (${val('soonName')||'순'})`]);
+    merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } });
+    addBlankRow();
 
     // 1) 기본정보
-    const infoRows = [
-      ['순모임 일자', val('meetDate')],
-      ['순모임 장소', val('meetPlace')],
-      ['출석인원', val('attend')],
-      ['재적인원', val('total')],
-      ['순', val('soonName')],
-      ['작성자', val('writerName')]
-    ];
-    const wsInfo = XLSX.utils.aoa_to_sheet(infoRows);
-    XLSX.utils.book_append_sheet(wb, wsInfo, '기본정보');
+    addSectionTitle('■ 기본 정보');
+    rows.push(['순모임 일자', val('meetDate'), '순모임 장소', val('meetPlace'), '출석인원', val('attend'), '재적인원', val('total')]);
+    rows.push(['순', val('soonName'), '작성자', val('writerName')]);
+    addBlankRow();
 
     // 2) 순원 신앙생활 사항
-    const memberHeader = ['이름','주일','수요','금요','새벽예배(횟수)','주일 불참 사유','234(순모임)','순모임 불참 사유'];
-    const memberRows = [memberHeader];
+    addSectionTitle('■ 순원 주간 신앙생활 사항');
+    rows.push(['이름','주일','수요','금요','새벽예배(횟수)','주일 불참 사유','234(순모임)','순모임 불참 사유']);
     document.querySelectorAll('#memberBody tr').forEach(tr=>{
       const name = tr.querySelector('.name-cell')?.value.trim() || '';
       if(!name) return;
@@ -866,7 +872,7 @@ async function saveAsExcel(){
       const reasons = tr.querySelectorAll('td input[type="text"]');
       let reasonList = [];
       reasons.forEach(r=>{ if(r !== tr.querySelector('.name-cell')) reasonList.push(r.value.trim()); });
-      memberRows.push([
+      rows.push([
         name,
         marks[0]?.dataset.state || '',
         marks[1]?.dataset.state || '',
@@ -877,30 +883,37 @@ async function saveAsExcel(){
         reasonList[1] || ''
       ]);
     });
-    const wsMember = XLSX.utils.aoa_to_sheet(memberRows);
-    XLSX.utils.book_append_sheet(wb, wsMember, '순원 신앙생활');
+    addBlankRow();
 
-    // 3) 순원 현황 (기도제목)
-    const prayerRows = [['이름','① 영적상황','② 가정','③ 직장','④ 건강']];
+    // 3) 돌파를 위한 섬김 사역보고
+    addSectionTitle('■ ‘돌파를 위한 섬김’ 사역 보고 (친밀한 교제)');
+    rows.push(['활동 내용', val('fellowship')]);
+    addBlankRow();
+
+    addSectionTitle('■ ‘기도동역자 되어주기’ 사역 보고');
+    rows.push(['활동 내용', val('prayerPartner')]);
+    rows.push(['234스몰 교제 중 기억나는 순원의 고백', val('confession')]);
+    addBlankRow();
+
+    // 4) 순원 현황 (기도제목)
+    addSectionTitle('■ 순원 현황 (기도제목)');
+    rows.push(['이름','① 영적상황','② 가정','③ 직장','④ 건강']);
     document.querySelectorAll('#prayerBody tr').forEach(tr=>{
       const cells = tr.querySelectorAll('input, textarea');
       const name = cells[0]?.value.trim() || '';
       if(!name) return;
-      prayerRows.push([name, cells[1]?.value.trim()||'', cells[2]?.value.trim()||'', cells[3]?.value.trim()||'', cells[4]?.value.trim()||'']);
+      rows.push([name, cells[1]?.value.trim()||'', cells[2]?.value.trim()||'', cells[3]?.value.trim()||'', cells[4]?.value.trim()||'']);
     });
-    const wsPrayer = XLSX.utils.aoa_to_sheet(prayerRows);
-    XLSX.utils.book_append_sheet(wb, wsPrayer, '순원현황(기도제목)');
+    addBlankRow();
 
-    // 4) 사역보고 및 건의사항
-    const noteRows = [
-      ['항목','내용'],
-      ['친밀한 교제 사역', val('fellowship')],
-      ['기도동역자 사역', val('prayerPartner')],
-      ['234스몰 교제 중 기억나는 고백', val('confession')],
-      ['순 기도제목/전달사항/건의사항', val('requests')]
-    ];
-    const wsNote = XLSX.utils.aoa_to_sheet(noteRows);
-    XLSX.utils.book_append_sheet(wb, wsNote, '사역보고');
+    // 5) 순 기도제목 / 전달사항 / 건의사항
+    addSectionTitle('■ 순 기도제목 또는 전달사항 및 건의사항');
+    rows.push([val('requests')]);
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!merges'] = merges;
+    ws['!cols'] = [{wch:16},{wch:16},{wch:16},{wch:16},{wch:16},{wch:20},{wch:16},{wch:20}];
+    XLSX.utils.book_append_sheet(wb, ws, '순모임보고서');
 
     XLSX.writeFile(wb, `${reportFileBaseName()}.xlsx`);
   }catch(e){
