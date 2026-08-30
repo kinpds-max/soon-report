@@ -183,7 +183,7 @@
     background:#eef5fb;
   }
   body.capture-mode .scrollwrap{overflow:visible !important; width:max-content !important; max-width:none !important;}
-  body.capture-mode .sheet{max-width:none !important; width:max-content !important;}
+  body.capture-mode .sheet{max-width:none !important; width:max-content !important; overflow:visible !important;}
   body.capture-mode table{width:auto !important;}
   .row-actions{
     margin-top:10px;
@@ -667,15 +667,27 @@ async function saveAsImage(){
   const btns = document.querySelectorAll('.footer-actions .btn');
   btns.forEach(b=>b.disabled = true);
   document.body.classList.add('capture-mode');
+  const prevScrollX = window.scrollX, prevScrollY = window.scrollY;
+  window.scrollTo(0,0);
+  // 클래스 적용으로 인한 레이아웃 재계산(reflow)이 끝날 때까지 대기
+  await new Promise(r=>setTimeout(r, 100));
   try{
     await loadHtml2Canvas();
     const target = document.querySelector('.sheet');
+    const fullWidth = target.scrollWidth;
+    const fullHeight = target.scrollHeight;
     const canvas = await html2canvas(target, {
       scale: 2,
       backgroundColor: '#ffffff',
       useCORS: true,
-      windowWidth: target.scrollWidth,
-      windowHeight: target.scrollHeight
+      width: fullWidth,
+      height: fullHeight,
+      windowWidth: fullWidth,
+      windowHeight: fullHeight,
+      scrollX: 0,
+      scrollY: 0,
+      x: 0,
+      y: 0
     });
     const link = document.createElement('a');
     const dateStr = document.getElementById('meetDate').value || new Date().toISOString().slice(0,10);
@@ -686,6 +698,7 @@ async function saveAsImage(){
     alert('이미지 저장 중 문제가 발생했습니다. 인터넷 연결을 확인하시거나, 인쇄(PDF저장) 기능을 대신 이용해주세요.');
   }finally{
     document.body.classList.remove('capture-mode');
+    window.scrollTo(prevScrollX, prevScrollY);
     btns.forEach(b=>b.disabled = false);
   }
 }
