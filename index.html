@@ -915,6 +915,42 @@ async function saveAsExcel(){
     ws['!cols'] = [{wch:16},{wch:16},{wch:16},{wch:16},{wch:16},{wch:20},{wch:16},{wch:20}];
     XLSX.utils.book_append_sheet(wb, ws, '순모임보고서');
 
+    // ── 관리표: 병합/서식 없이 한 사람당 한 줄로 된 표 형태(필터·정렬 가능) ──
+    const manageHeader = ['이름','주일','수요','금요','새벽예배(횟수)','주일 불참 사유','234(순모임)','순모임 불참 사유','① 영적상황','② 가정','③ 직장','④ 건강'];
+    const manageRows = [manageHeader];
+    const prayerByName = {};
+    document.querySelectorAll('#prayerBody tr').forEach(tr=>{
+      const cells = tr.querySelectorAll('input, textarea');
+      const name = cells[0]?.value.trim() || '';
+      if(!name) return;
+      prayerByName[name] = [cells[1]?.value.trim()||'', cells[2]?.value.trim()||'', cells[3]?.value.trim()||'', cells[4]?.value.trim()||''];
+    });
+    document.querySelectorAll('#memberBody tr').forEach(tr=>{
+      const name = tr.querySelector('.name-cell')?.value.trim() || '';
+      if(!name) return;
+      const marks = tr.querySelectorAll('.mark');
+      const dawn = tr.querySelector('.dawn-count')?.value.trim() || '';
+      const reasons = tr.querySelectorAll('td input[type="text"]');
+      let reasonList = [];
+      reasons.forEach(r=>{ if(r !== tr.querySelector('.name-cell')) reasonList.push(r.value.trim()); });
+      const prayer = prayerByName[name] || ['','','',''];
+      manageRows.push([
+        name,
+        marks[0]?.dataset.state || '',
+        marks[1]?.dataset.state || '',
+        marks[2]?.dataset.state || '',
+        dawn,
+        reasonList[0] || '',
+        marks[3]?.dataset.state || '',
+        reasonList[1] || '',
+        ...prayer
+      ]);
+    });
+    const wsManage = XLSX.utils.aoa_to_sheet(manageRows);
+    wsManage['!cols'] = [{wch:10},{wch:6},{wch:6},{wch:6},{wch:12},{wch:18},{wch:10},{wch:18},{wch:22},{wch:22},{wch:22},{wch:22}];
+    wsManage['!autofilter'] = { ref: XLSX.utils.encode_range({ s:{r:0,c:0}, e:{r: manageRows.length-1, c: manageHeader.length-1} }) };
+    XLSX.utils.book_append_sheet(wb, wsManage, '관리표');
+
     XLSX.writeFile(wb, `${reportFileBaseName()}.xlsx`);
   }catch(e){
     alert('엑셀 저장 중 문제가 발생했습니다. 인터넷 연결을 확인해주세요.');
