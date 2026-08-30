@@ -7,6 +7,7 @@
 <title>순모임 보고서</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --navy:#00559e;
@@ -190,6 +191,8 @@
   body.capture-mode .scrollwrap{overflow:visible !important;}
   body.capture-mode .sheet{max-width:none !important; width:max-content !important; min-width:820px; overflow:visible !important;}
   body.capture-mode table{width:100% !important;}
+  body.capture-mode .row-actions{display:none !important;}
+  body.capture-mode .footer-actions{display:none !important;}
   .row-actions{
     margin-top:10px;
     display:flex;
@@ -400,6 +403,7 @@ if(sessionStorage.getItem('soon_gate_ok')==='1'){ document.getElementById('gate'
     <button class="btn btn-gold" onclick="copyForShare()">📋 텍스트 복사</button>
     <button class="btn btn-primary" onclick="window.print()">🖨 인쇄 / PDF 저장</button>
     <button class="btn btn-ghost" onclick="saveAsImage()">🖼 이미지로 저장</button>
+    <button class="btn btn-ghost" style="border-color:#1d6f42;color:#1d6f42;" onclick="saveAsExcel()">📊 엑셀로 저장</button>
     <button class="btn btn-primary" style="background:#3b3838;" onclick="sendEmail()">✉️ 이메일로 보내기</button>
     <button class="btn btn-gold" style="background:#fae100;color:#3b1e1e;" onclick="shareKakao()">💬 카카오톡으로 보내기</button>
   </div>
@@ -636,12 +640,40 @@ function copyForShare(){
   });
 }
 
-// ── 이메일로 실제 발송 (기본 메일 앱을 열어 제목/본문 자동 입력) ──
-function sendEmail(){
+// ── 이미지 파일을 함께 공유 시도 (모바일 브라우저의 파일 공유 지원 시에만 성공) ──
+async function tryShareImageFile(title, text){
+  if(!navigator.canShare || !navigator.share) return false;
+  try{
+    const canvas = await generateReportCanvas();
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    if(!blob) return false;
+    const file = new File([blob], `${reportFileBaseName()}.png`, { type: 'image/png' });
+    if(!navigator.canShare({ files: [file] })) return false;
+    await navigator.share({ files: [file], title, text: text.slice(0, 300) });
+    return true;
+  }catch(e){
+    // 사용자가 공유를 취소했거나 파일 공유 미지원 → 아래 대체 로직으로
+    return e && e.name === 'AbortError' ? true : false;
+  }
+}
+
+// ── 이메일로 실제 발송 (가능하면 저장 이미지 첨부 공유창, 아니면 이미지 자동다운로드 + 메일앱 열기) ──
+async function sendEmail(){
   const subject = `하늘바람 순모임보고서 (${val('soonName')||'순'}) - ${formatDate(document.getElementById('meetDate').value) || ''}`;
   const body = buildShareText();
+
+  const shared = await tryShareImageFile(subject, body);
+  if(shared) return;
+
+  // 파일 공유 미지원(대부분의 데스크톱 브라우저): 이미지를 먼저 다운로드해두고, 메일 앱에는 텍스트만 채워서 열기
+  try{
+    await saveAsImage();
+  }catch(e){ /* 이미지 저장 실패해도 이메일은 계속 진행 */ }
   const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   window.location.href = mailto;
+  setTimeout(()=>{
+    alert('메일 앱이 열렸습니다.\n방금 다운로드된 이미지 파일을 메일에 직접 첨부해주세요.\n(웹 표준상 메일에 파일을 자동으로 첨부하는 것은 지원되지 않습니다.)');
+  }, 300);
 }
 
 // ── 카카오 SDK 초기화 ──
@@ -652,10 +684,13 @@ try{
   }
 }catch(e){ /* SDK 로드 실패 시 아래 shareKakao에서 대체 동작 */ }
 
-// ── 카카오톡으로 실제 공유 (카카오 공식 공유 SDK 사용, 미지원 시 브라우저 공유/복사로 대체) ──
+// ── 카카오톡으로 실제 공유 (가능하면 저장 이미지 첨부 공유창 사용, 아니면 카카오 공식 텍스트/링크 공유 SDK로 대체) ──
 async function shareKakao(){
   const text = buildShareText();
   const title = `하늘바람 순모임보고서 (${val('soonName')||'순'})`;
+
+  const shared = await tryShareImageFile(title, text);
+  if(shared) return;
 
   if(window.Kakao && window.Kakao.isInitialized && window.Kakao.isInitialized()){
     try{
@@ -736,7 +771,8 @@ function domSwapRestore(swapped){
   });
 }
 
-async function saveAsImage(){
+// ── 보고서 전체를 캡처해 canvas로 반환 (버튼들은 이미지에서 제외) ──
+async function generateReportCanvas(){
   const btns = document.querySelectorAll('.footer-actions .btn');
   btns.forEach(b=>b.disabled = true);
   document.body.classList.add('capture-mode');
@@ -765,18 +801,110 @@ async function saveAsImage(){
       x: 0,
       y: 0
     });
-    const link = document.createElement('a');
-    const dateStr = document.getElementById('meetDate').value || new Date().toISOString().slice(0,10);
-    link.download = `하늘바람_순모임보고서_${dateStr}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
-  }catch(e){
-    alert('이미지 저장 중 문제가 발생했습니다. 인터넷 연결을 확인하시거나, 인쇄(PDF저장) 기능을 대신 이용해주세요.');
+    return canvas;
   }finally{
     domSwapRestore(swapped);
     document.body.classList.remove('capture-mode');
     window.scrollTo(prevScrollX, prevScrollY);
     btns.forEach(b=>b.disabled = false);
+  }
+}
+
+function reportFileBaseName(){
+  const dateStr = document.getElementById('meetDate').value || new Date().toISOString().slice(0,10);
+  return `하늘바람_순모임보고서_${dateStr}`;
+}
+
+async function saveAsImage(){
+  try{
+    const canvas = await generateReportCanvas();
+    const link = document.createElement('a');
+    link.download = `${reportFileBaseName()}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }catch(e){
+    alert('이미지 저장 중 문제가 발생했습니다. 인터넷 연결을 확인하시거나, 인쇄(PDF저장) 기능을 대신 이용해주세요.');
+  }
+}
+
+// ── 엑셀 파일로 저장 ──
+function loadXlsxLib(){
+  return new Promise((resolve, reject)=>{
+    if(typeof XLSX !== 'undefined'){ resolve(); return; }
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    script.onload = ()=>resolve();
+    script.onerror = ()=>reject(new Error('xlsx 로드 실패'));
+    document.head.appendChild(script);
+  });
+}
+async function saveAsExcel(){
+  try{
+    await loadXlsxLib();
+    const wb = XLSX.utils.book_new();
+
+    // 1) 기본정보
+    const infoRows = [
+      ['순모임 일자', val('meetDate')],
+      ['순모임 장소', val('meetPlace')],
+      ['출석인원', val('attend')],
+      ['재적인원', val('total')],
+      ['순', val('soonName')],
+      ['작성자', val('writerName')]
+    ];
+    const wsInfo = XLSX.utils.aoa_to_sheet(infoRows);
+    XLSX.utils.book_append_sheet(wb, wsInfo, '기본정보');
+
+    // 2) 순원 신앙생활 사항
+    const memberHeader = ['이름','주일','수요','금요','새벽예배(횟수)','주일 불참 사유','234(순모임)','순모임 불참 사유'];
+    const memberRows = [memberHeader];
+    document.querySelectorAll('#memberBody tr').forEach(tr=>{
+      const name = tr.querySelector('.name-cell')?.value.trim() || '';
+      if(!name) return;
+      const marks = tr.querySelectorAll('.mark');
+      const dawn = tr.querySelector('.dawn-count')?.value.trim() || '';
+      const reasons = tr.querySelectorAll('td input[type="text"]');
+      let reasonList = [];
+      reasons.forEach(r=>{ if(r !== tr.querySelector('.name-cell')) reasonList.push(r.value.trim()); });
+      memberRows.push([
+        name,
+        marks[0]?.dataset.state || '',
+        marks[1]?.dataset.state || '',
+        marks[2]?.dataset.state || '',
+        dawn,
+        reasonList[0] || '',
+        marks[3]?.dataset.state || '',
+        reasonList[1] || ''
+      ]);
+    });
+    const wsMember = XLSX.utils.aoa_to_sheet(memberRows);
+    XLSX.utils.book_append_sheet(wb, wsMember, '순원 신앙생활');
+
+    // 3) 순원 현황 (기도제목)
+    const prayerRows = [['이름','① 영적상황','② 가정','③ 직장','④ 건강']];
+    document.querySelectorAll('#prayerBody tr').forEach(tr=>{
+      const cells = tr.querySelectorAll('input, textarea');
+      const name = cells[0]?.value.trim() || '';
+      if(!name) return;
+      prayerRows.push([name, cells[1]?.value.trim()||'', cells[2]?.value.trim()||'', cells[3]?.value.trim()||'', cells[4]?.value.trim()||'']);
+    });
+    const wsPrayer = XLSX.utils.aoa_to_sheet(prayerRows);
+    XLSX.utils.book_append_sheet(wb, wsPrayer, '순원현황(기도제목)');
+
+    // 4) 사역보고 및 건의사항
+    const noteRows = [
+      ['항목','내용'],
+      ['친밀한 교제 사역', val('fellowship')],
+      ['기도동역자 사역', val('prayerPartner')],
+      ['234스몰 교제 중 기억나는 고백', val('confession')],
+      ['순 기도제목/전달사항/건의사항', val('requests')]
+    ];
+    const wsNote = XLSX.utils.aoa_to_sheet(noteRows);
+    XLSX.utils.book_append_sheet(wb, wsNote, '사역보고');
+
+    XLSX.writeFile(wb, `${reportFileBaseName()}.xlsx`);
+  }catch(e){
+    alert('엑셀 저장 중 문제가 발생했습니다. 인터넷 연결을 확인해주세요.');
   }
 }
 
