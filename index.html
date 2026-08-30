@@ -928,8 +928,12 @@ document.addEventListener('keydown', function(e){
     if(e.key === 'ArrowRight' && pos !== len) return;
   }
   if(isTextarea && (e.key === 'ArrowUp' || e.key === 'ArrowDown')){
-    // 여러 줄 textarea는 줄 이동을 우선하고 셀 이동은 하지 않음
-    return;
+    // 커서가 첫 줄(위로 더 갈 데 없음)이거나 마지막 줄(아래로 더 갈 데 없음)일 때만 셀 이동, 그 외엔 줄 안에서 커서 이동 우선
+    const pos = active.selectionStart;
+    const before = active.value.slice(0, pos);
+    const after = active.value.slice(pos);
+    if(e.key === 'ArrowUp' && before.indexOf('\n') !== -1) return;
+    if(e.key === 'ArrowDown' && after.indexOf('\n') !== -1) return;
   }
 
   const row = td.parentElement;
