@@ -689,6 +689,45 @@ function loadHtml2Canvas(){
   });
 }
 
+// ── html2canvas가 <input>/<textarea> 안의 한글을 제대로 못 그리는 문제 우회:
+//    캡처 직전 값들을 일반 텍스트(div)로 잠깐 바꿔치기 했다가 캡처 후 복원 ──
+function domSwapForCapture(){
+  const elements = document.querySelectorAll('.sheet input[type="text"], .sheet input[type="number"], .sheet textarea, .sheet input[type="date"]');
+  const swapped = [];
+  elements.forEach(el=>{
+    const cs = window.getComputedStyle(el);
+    const div = document.createElement('div');
+    div.textContent = el.value || '';
+    div.style.width = cs.width;
+    div.style.minHeight = cs.height;
+    div.style.fontSize = cs.fontSize;
+    div.style.fontFamily = cs.fontFamily;
+    div.style.fontWeight = cs.fontWeight;
+    div.style.color = el.value ? cs.color : 'transparent';
+    div.style.textAlign = cs.textAlign;
+    div.style.padding = cs.padding;
+    div.style.margin = cs.margin;
+    div.style.border = cs.border;
+    div.style.background = cs.backgroundColor;
+    div.style.boxSizing = cs.boxSizing;
+    div.style.whiteSpace = (el.tagName === 'TEXTAREA') ? 'pre-wrap' : 'nowrap';
+    div.style.wordBreak = 'break-all';
+    div.style.lineHeight = cs.lineHeight;
+    div.style.display = cs.display === 'none' ? 'block' : cs.display;
+    div.style.overflow = 'visible';
+    el.style.display = 'none';
+    el.insertAdjacentElement('afterend', div);
+    swapped.push({ el, div });
+  });
+  return swapped;
+}
+function domSwapRestore(swapped){
+  swapped.forEach(({el, div})=>{
+    el.style.display = '';
+    div.remove();
+  });
+}
+
 async function saveAsImage(){
   const btns = document.querySelectorAll('.footer-actions .btn');
   btns.forEach(b=>b.disabled = true);
@@ -697,8 +736,11 @@ async function saveAsImage(){
   window.scrollTo(0,0);
   // 클래스 적용으로 인한 레이아웃 재계산(reflow)이 끝날 때까지 대기
   await new Promise(r=>setTimeout(r, 100));
+  let swapped = [];
   try{
     await loadHtml2Canvas();
+    swapped = domSwapForCapture();
+    await new Promise(r=>setTimeout(r, 50));
     const target = document.querySelector('.sheet');
     const fullWidth = target.scrollWidth;
     const fullHeight = target.scrollHeight;
@@ -723,6 +765,7 @@ async function saveAsImage(){
   }catch(e){
     alert('이미지 저장 중 문제가 발생했습니다. 인터넷 연결을 확인하시거나, 인쇄(PDF저장) 기능을 대신 이용해주세요.');
   }finally{
+    domSwapRestore(swapped);
     document.body.classList.remove('capture-mode');
     window.scrollTo(prevScrollX, prevScrollY);
     btns.forEach(b=>b.disabled = false);
