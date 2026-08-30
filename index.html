@@ -109,8 +109,11 @@
   .section:nth-of-type(4n+4) h2::before{background:var(--blue);}
   .grid{
     display:grid;
-    grid-template-columns:repeat(4,1fr);
-    gap:10px 14px;
+    grid-template-columns:repeat(6,1fr);
+    gap:10px 12px;
+  }
+  @media (max-width:820px){
+    .grid{grid-template-columns:repeat(3,1fr);}
   }
   .field label{
     display:block;
