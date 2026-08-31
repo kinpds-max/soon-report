@@ -160,7 +160,18 @@
   }
   td input[type="text"].name-cell{text-align:left;padding-left:6px;white-space:nowrap;}
   #memberTable th:first-child, #memberTable td:first-child,
-  #prayerTable th:first-child, #prayerTable td:first-child{min-width:74px;}
+  #prayerTable th:first-child, #prayerTable td:first-child{
+    min-width:74px;
+    position:sticky;
+    left:0;
+    z-index:2;
+    background:#fff;
+    box-shadow:2px 0 4px rgba(0,0,0,0.08);
+  }
+  #memberTable th:first-child, #prayerTable th:first-child{
+    background:var(--navy);
+    z-index:3;
+  }
   .mark{
     display:flex;
     align-items:center;
