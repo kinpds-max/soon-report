@@ -449,7 +449,7 @@ if(sessionStorage.getItem('soon_gate_ok')==='1'){ document.getElementById('gate'
     <button class="btn btn-ghost" style="border-color:#1d6f42;color:#1d6f42;" onclick="saveAsExcel()">📊 엑셀로 저장</button>
     <button class="btn btn-primary" style="background:#3b3838;" onclick="sendEmail()">✉️ 이메일로 보내기</button>
     <button class="btn btn-gold" style="background:#fae100;color:#3b1e1e;" onclick="shareKakao()">💬 카카오톡으로 보내기</button>
-    <button class="btn btn-ghost" style="border-color:#0f9d58;color:#0f9d58;" onclick="saveToGoogleSheet()">☁️ 구글시트로 저장</button>
+    <button class="btn btn-ghost" style="border-color:#0f9d58;color:#0f9d58;" onclick="saveToGoogleSheet()">📤 구글시트로 전송</button>
   </div>
 </div>
 
@@ -638,7 +638,7 @@ function collectReportDataForSheet(){
 async function saveToGoogleSheet(){
   const btn = document.querySelector('.footer-actions button[onclick="saveToGoogleSheet()"]');
   const originalText = btn ? btn.textContent : '';
-  if(btn){ btn.disabled = true; btn.textContent = '저장 중...'; }
+  if(btn){ btn.disabled = true; btn.textContent = '전송 중...'; }
   try{
     const data = collectReportDataForSheet();
     await fetch(GOOGLE_SHEET_WEBAPP_URL, {
@@ -647,9 +647,9 @@ async function saveToGoogleSheet(){
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(data)
     });
-    alert('구글시트로 저장 요청을 보냈습니다.\n잠시 후 시트에서 새 줄이 추가됐는지 확인해주세요.');
+    alert('구글시트로 전송 요청을 보냈습니다.\n잠시 후 시트에서 새 줄이 추가됐는지 확인해주세요.');
   }catch(e){
-    alert('구글시트 저장 중 문제가 발생했습니다. 인터넷 연결을 확인해주세요.');
+    alert('구글시트 전송 중 문제가 발생했습니다. 인터넷 연결을 확인해주세요.');
   }finally{
     if(btn){ btn.disabled = false; btn.textContent = originalText; }
   }
